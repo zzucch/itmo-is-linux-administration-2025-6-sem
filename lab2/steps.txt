@@ -1,0 +1,140 @@
+// 1
+fdisk /dev/sdb
+n
+p
+1
+<CR>
++500M
+w
+
+// 2
+blkid /dev/sdb1 | cut -d'"' -f2 >/root/uuid
+
+// 3
+mkfs.ext4 -b 4096 /dev/sdb1
+
+// 4
+dumpe2fs /dev/sdb1
+
+// 5
+tune2fs -i 2m -c 2 /dev/sdb1
+
+// 6
+mkdir /mnt/newdisk
+mount /dev/sdb1 /mnt/newdisk
+
+// 7
+ln -s /mnt/newdisk /root/sdb
+
+// 8
+mkdir /mnt/newdisk/some_name
+
+// 9
+echo "UUID=$(blkid /dev/sdb1 | cut -d'"' -f2) /mnt/newdisk ext4 noexec,noatime,nofail 0 2" >> /etc/fstab
+
+// 10
+umount /mnt/newdisk
+
+fdisk /dev/sdb
+d
+n
+p
+1
+<CR>
++1G
+w
+
+e2fsck -f /dev/sdb1
+resize2fs /dev/sdb1
+
+// 11
+e2fsck -n /dev/sdb1
+
+// 12
+fdisk /dev/sdb
+n
+p
+2
+<CR>
++12M
+w
+
+mke2fs -b 4096 -O journal_dev /dev/sdb2
+
+tune2fs -O ^has_journal /dev/sdb1
+tune2fs -j -J device=/dev/sdb2 /dev/sdb1
+
+// 13
+fdisk /dev/sdc
+n
+p
+1
+<CR>
+<CR>
+w
+
+fdisk /dev/sdd
+n
+p
+1
+<CR>
+<CR>
+w
+
+pvcreate /dev/sdc1
+pvcreate /dev/sdd1
+
+// 14
+vgcreate vg01 /dev/sdc1 /dev/sdd1
+lvcreate -l 100%FREE vg01 -i 2
+mkfs.ext4 -b 4096 /dev/vg01/lvol0
+
+// 15
+mkdir /mnt/vol01
+mount /dev/vg01/lvol0 /mnt/vol01
+echo "/dev/vg01/lvol0 /mnt/vol01 ext4 defaults 0 2" >> /etc/fstab
+
+// 16
+pvdisplay
+vgdisplay
+lvdisplay
+
+// 17
+fdisk /dev/sde
+n
+p
+1
+<CR>
+<CR>
+w
+
+pvcreate /dev/sde1
+
+vgextend vg01 /dev/sde1
+lvextend -i 1 -l 100%VG /dev/vg01/lvol0
+
+// 18
+resize2fs /dev/vg01/lvol0
+
+// 19
+pvdisplay
+vgdisplay
+lvdisplay
+
+// 20
+apt install nfs-kernel-server
+systemctl enable nfs-server --now
+
+// 21
+echo "/mnt/vol01 10.244.0.0/16(rw,sync,no_root_squash)" >> /etc/exports
+exportfs -ra
+
+// 22
+mkdir /var/remotenfs
+mount.nfs 10.244.121.219:/mnt/vol01 /var/remotenfs
+
+// 23
+cp -r itmo-is-linux-administration-2024-6-sem/ /var/remotenfs/
+
+cd /mnt/vol01/
+ls -lha
