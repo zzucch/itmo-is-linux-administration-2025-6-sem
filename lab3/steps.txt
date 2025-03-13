@@ -25,7 +25,7 @@ make
 echo "
 install:
     cp bastet /usr/local/bin/
-    chmod 755 /usr/local/bin/bastet" >> Makefile
+    chmod 755 /usr/local/bin/bastet" >>Makefile
 make install
 
 // 9
@@ -38,7 +38,7 @@ dpkg --get-selections | grep install | cut -f1 >task10.log
 apt-cache depends gcc >task11.log
 
 // 12
-apt-cache rdepends libgpm2 > task12.log
+apt-cache rdepends libgpm2 >task12.log
 
 // 13
 mkdir localrepo
@@ -50,7 +50,7 @@ wget http://snapshot.debian.org/archive/debian/20240129T091021Z/pool/main/h/htop
 wget http://snapshot.debian.org/archive/debian/20240118T212557Z/pool/main/h/htop/htop_3.3.0-3_amd64.deb
 
 // 14
-dpkg-scanpackages --multiversion . > Packages
+dpkg-scanpackages --multiversion . >Packages
 echo "Origin: My Local Repo
 Label: My Local Repo
 Suite: stable
@@ -58,17 +58,17 @@ Version: 1.0
 Codename: myrepo
 Architectures: amd64
 Components: main
-Description: My local APT repository" > Release
+Description: My local APT repository" >Release
 
 // 15
-echo "deb [trusted=yes] file:/root/localrepo ./" > /etc/apt/sources.list.d/localrepo.list
+echo "deb [trusted=yes] file:/root/localrepo ./" >/etc/apt/sources.list.d/localrepo.list
 apt update
 
 // 16
 apt-cache policy
 
 // 17
-apt-cache madison htop > task16.log
+apt-cache madison htop >task16.log
 
 // 18
 apt install htop=3.2.2-2
