@@ -1,0 +1,92 @@
+// 1
+cat /etc/apt/sources.list | grep "^deb" | cut -d ' ' -f2 | uniq
+
+// 2
+apt update
+
+// 3
+apt show essential
+
+// 4
+apt install build-essential -V
+
+// 5
+apt-cache search "clone with a bastard algorithm"
+
+// 6
+apt-get source bastet
+
+// 7
+cd bastet-0.43/
+apt install libboost-dev libncurses-dev libboost-program-options-dev
+make
+
+// 8
+echo "
+install:
+    cp bastet /usr/local/bin/
+    chmod 755 /usr/local/bin/bastet" >> Makefile
+make install
+
+// 9
+cut -d: -f1 /etc/passwd | xargs -n1 sh -c 'timeout 1 su - "$0" -c "/usr/local/bin/bastet" || echo "error for user: $0"'
+
+// 10
+dpkg --get-selections | grep install | cut -f1 >task10.log
+
+// 11
+apt-cache depends gcc >task11.log
+
+// 12
+apt-cache rdepends libgpm2 > task12.log
+
+// 13
+mkdir localrepo
+cd localrepo
+wget http://snapshot.debian.org/archive/debian/20250312T144852Z/pool/main/h/htop/htop_3.4.0-2_amd64.deb
+wget http://snapshot.debian.org/archive/debian/20250310T101857Z/pool/main/h/htop/htop_3.4.0-1_amd64.deb
+wget http://snapshot.debian.org/archive/debian/20250209T210016Z/pool/main/h/htop/htop_3.3.0-5_amd64.deb
+wget http://snapshot.debian.org/archive/debian/20240129T091021Z/pool/main/h/htop/htop_3.3.0-4_amd64.deb
+wget http://snapshot.debian.org/archive/debian/20240118T212557Z/pool/main/h/htop/htop_3.3.0-3_amd64.deb
+
+// 14
+dpkg-scanpackages --multiversion . > Packages
+echo "Origin: My Local Repo
+Label: My Local Repo
+Suite: stable
+Version: 1.0
+Codename: myrepo
+Architectures: amd64
+Components: main
+Description: My local APT repository" > Release
+
+// 15
+echo "deb [trusted=yes] file:/root/localrepo ./" > /etc/apt/sources.list.d/localrepo.list
+apt update
+
+// 16
+apt-cache policy
+
+// 17
+apt-cache madison htop > task16.log
+
+// 18
+apt install htop=3.2.2-2
+
+// 19
+apt download nano
+dpkg-deb -R nano_7.2-1+deb12u1_amd64.deb new_nano/
+ln -s ./new_nano/bin/nano ./new_nano/bin/newnano
+dpkg-deb -b new_nano new_nano.deb
+dpkg -i new_nano.deb
+newnano
+
+// 20
+This APT has Super Cow Powers.
+                 (__) 
+                 (oo) 
+           /------\/ 
+          / |    ||   
+         *  /\---/\ 
+            ~~   ~~   
+..."Have you mooed today?"...
