@@ -1,0 +1,257 @@
+// 1
+useradd user-17
+systemctl set-property user-17.slice CPUQuota=30%
+
+// 2
+cgcreate -g memory:/memory_limit
+cgset -r memory.max=670M memory_limit
+cgexec -g memory:memory_limit tail /dev/zero
+    Killed
+
+// 3
+cgcreate -g io:/backup_limits
+cgset -r io.max="8:0 riops=1170 wiops=670" backup_limits
+cgexec -g io:backup_limits dd if=/dev/zero of=/tmp/ex bs=4k count=10000 oflag=direct
+    2.7 MB/s
+cgexec -g io:backup_limits dd if=/tmp/ex of=/dev/null bs=4k count=10000 iflag=direct
+    4.8 MB/s
+
+// 4
+cgcreate -g cpuset:/cpu_set
+cgset -r cpuset.cpus=0 cpu_set
+cgexec -g cpuset:cpu_set top
+taskset -p 1569
+    pid 1569's current affinity mask: ff
+
+// 5
+#!/bin/bash
+
+pid=$1
+group_name="dynamic_process_$pid"
+
+cgcreate -g cpu:/"$group_name"
+
+echo "$pid" >>/sys/fs/cgroup/"$group_name"/cgroup.procs
+
+while true; do
+    cpu_load=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'.' -f1)
+
+    if [ "$cpu_load" -lt 20 ]; then
+        cgset -r cpu.max="80000 100000" "$group_name"
+    elif [ "$cpu_load" -gt 60 ]; then
+        cgset -r cpu.max="30000 100000" "$group_name"
+    fi
+
+    sleep 5
+done
+
+// 6
+unshare -u bash
+hostname isolated-student-17
+hostname
+    isolated-student-17
+
+hostname
+    meiro
+
+// 7
+unshare -p -f bash
+mount -t proc proc /proc
+ps aux
+    USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+    root           1  0.0  0.0   7196  3888 pts/1    S    05:02   0:00 bash
+    root           3  0.0  0.1  11084  4448 pts/1    R+   05:02   0:00 ps aux
+
+ps aux
+    USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND                           
+    root           1  0.0  0.3 169000 13536 ?        Ss   Feb13   1:07 /sbin/init                        
+    root           2  0.0  0.0      0     0 ?        S    Feb13   0:02 [kthreadd]                        
+    root           3  0.0  0.0      0     0 ?        I<   Feb13   0:00 [rcu_gp]                          
+    root           4  0.0  0.0      0     0 ?        I<   Feb13   0:00 [rcu_par_gp]                      
+    root           5  0.0  0.0      0     0 ?        I<   Feb13   0:00 [slub_flushwq]                    
+    root           6  0.0  0.0      0     0 ?        I<   Feb13   0:00 [netns]                      
+    root           8  0.0  0.0      0     0 ?        I<   Feb13   0:00 [kworker/0:0H-events_highpri]     
+    root          10  0.0  0.0      0     0 ?        I<   Feb13   0:00 [mm_percpu_wq]                    
+    root          11  0.0  0.0      0     0 ?        I    Feb13   0:00 [rcu_tasks_kthread]               
+    root          12  0.0  0.0      0     0 ?        I    Feb13   0:00 [rcu_tasks_rude_kthread]          
+    root          13  0.0  0.0      0     0 ?        I    Feb13   0:00 [rcu_tasks_trace_kthread]         
+    root          14  0.0  0.0      0     0 ?        S    Feb13   0:00 [ksoftirqd/0]                     
+    root          15  0.0  0.0      0     0 ?        I    Feb13   2:07 [rcu_preempt]                
+    root          16  0.0  0.0      0     0 ?        S    Feb13   0:22 [migration/0]
+    .......
+
+// 8
+unshare --mount bash
+mkdir /tmp/private_$(whoami)
+mount -t tmpfs tmpfs /tmp/private_$(whoami)
+df -h | grep private_$(whoami)
+    tmpfs           2.0G     0  2.0G   0% /tmp/private_root
+
+df -h grep private_$(whoami)
+    
+
+// 9
+unshare --net bash
+ping google.com
+    ping: google.com: Temporary failure in name resolution
+ping 8.8.8.8
+    ping: connect: Network is unreachable
+
+ping google.com
+    PING google.com (64.233.164.102) 56(84) bytes of data.
+    64 bytes from lf-in-f102.1e100.net (64.233.164.102): icmp_seq=1 ttl=109 time=11.1 ms
+    64 bytes from lf-in-f102.1e100.net (64.233.164.102): icmp_seq=2 ttl=109 time=9.57 ms
+    64 bytes from lf-in-f102.1e100.net (64.233.164.102): icmp_seq=3 ttl=109 time=17.8 ms
+    ^C
+    --- google.com ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+    rtt min/avg/max/mdev = 9.567/12.828/17.796/3.569 ms
+
+// 10a
+mkdir -p ~/overlay_/{lower,upper,work,merged}
+echo "Оригинальный текст из LOWER" > ~/overlay_/lower/17_original.txt
+mount -t overlay overlay -o lowerdir=~/overlay_/lower,upperdir=~/overlay_/upper,workdir=~/overlay_/work ~/overlay_/merged
+
+// 10b
+rm ~/overlay_/merged/17_original.txt
+ls -hl ~/overlay_/upper
+    total 0
+
+// 10c
+#!/bin/bash
+
+lower=~/overlay_/lower
+upper=~/overlay_/upper
+merged=~/overlay_/merged
+audit_log=17_audit.log
+
+true >"$audit_log"
+
+find "$upper" -type c -o -name ".wh.*" | while read -r file; do
+    echo "found: ${file}" >>"$audit_log"
+done
+
+cd "$lower" || exit
+find . -type f -o -type d | while read -r file; do
+    if [ "$file" != "." ]; then
+        rel_path=${file#./}
+
+        if [ ! -e "${merged}/${rel_path}" ]; then
+            echo "merged missing: ${rel_path}" >>"$audit_log"
+        elif [ -f "${lower}/${rel_path}" ] && [ -f "${merged}/${rel_path}" ]; then
+            if ! cmp -s "${lower}/${rel_path}" "${merged}/${rel_path}"; then
+                echo "diff: ${rel_path}" >>"$audit_log"
+            fi
+        fi
+    fi
+done
+
+2 root root 0, 0 Apr 11 02:19 17_original.txt
+
+rm ~/overlay_/upper/17_original.txt
+
+// 10d
+1. при удалении в merged, создается .wh. файл в upper, что значит что файл в lower должен быть скрыт
+2. нет, потому что он нужен для разных операций, без него не получится обрабатывать изменения
+3. он будет копией lower - в upper нет изменений и whiteout
+
+// 11
+/// Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+RUN useradd --system zcchr && \
+    chown -R zcchr:zcchr /app
+
+USER zcchr
+COPY --chown=zcchr:zcchr . .
+
+EXPOSE 5000
+
+CMD ["python", "app.py"]
+
+/// requirements.txt
+requirements.txt
+
+/// .dockerignore
+.git
+.docker
+.gitignore
+.dockerignore
+.gitattributes
+.codeclimate.yml
+.taskcluster.yml
+env/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+build/
+target/
+.env
+.venv/
+.ropeproject
+venv/
+Dockerfile
+docs/_build/
+docker-compose.yml
+.Python
+develop-eggs/
+.travis.yml
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.mo
+*.pot
+*.log
+**/__pycache__/
+**/*.py[cod]
+*.so
+**/.ropeproject
+**/*.swp
+
+// 12
+version: '3.8'
+services:
+  database:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: wordpress
+    volumes:
+      - database-data:/var/lib/mysql
+    restart: always
+  wordpress:
+    image: wordpress:latest
+    ports:
+      - "2017:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: password
+    volumes:
+      - wordpress-data:/var/www/html
+    depends_on:
+      - database
+    restart: always
+volumes:
+  wordpress-data:
+  database-data:
